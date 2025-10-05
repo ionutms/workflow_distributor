@@ -40,6 +40,22 @@ jobs:
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
           
+          # Check if workflows directory exists
+          if [ ! -d "$WORKFLOW_DIR" ]; then
+            echo "❌ Error: $WORKFLOW_DIR directory not found!"
+            exit 1
+          fi
+          
+          # Check if there are any workflow files
+          if [ -z "$(ls -A $WORKFLOW_DIR 2>/dev/null)" ]; then
+            echo "❌ Error: No files found in $WORKFLOW_DIR directory!"
+            exit 1
+          fi
+          
+          echo "Found workflows:"
+          ls -la "$WORKFLOW_DIR"
+          echo ""
+          
           # Process each repository
           for repo in "${REPOS[@]}"; do
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -48,9 +64,14 @@ jobs:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             
             # Clone the target repository
-            git clone --branch "$TARGET_BRANCH" --single-branch \
+            echo "→ Cloning repository..."
+            if ! git clone --branch "$TARGET_BRANCH" --single-branch \
               "https://x-access-token:${GITHUB_TOKEN}@github.com/${repo}.git" \
-              "temp-${repo##*/}"
+              "temp-${repo##*/}" 2>&1; then
+              echo "❌ Failed to clone $repo on branch $TARGET_BRANCH"
+              echo "   Make sure the branch exists and you have access"
+              continue
+            fi
             
             cd "temp-${repo##*/}"
             
@@ -58,22 +79,44 @@ jobs:
             mkdir -p .github/workflows
             
             # Copy all workflow files
-            echo "  → Copying workflow files..."
-            cp -v "../${WORKFLOW_DIR}"/* .github/workflows/ 2>/dev/null || {
-              echo "  ⚠ No workflow files found to copy"
+            echo "→ Copying workflow files..."
+            if cp -v "../${WORKFLOW_DIR}"/* .github/workflows/ 2>&1; then
+              echo "✓ Files copied successfully"
+            else
+              echo "❌ Failed to copy workflow files"
               cd ..
               rm -rf "temp-${repo##*/}"
               continue
-            }
+            fi
+            
+            # Show git status
+            echo ""
+            echo "→ Git status:"
+            git status
+            echo ""
             
             # Check if there are changes
             if [[ -n $(git status -s) ]]; then
+              echo "→ Committing changes..."
               git add .github/workflows
-              git commit -m "chore: update workflows from central repository"
-              git push origin "$TARGET_BRANCH"
-              echo "  ✓ Successfully committed workflows to $TARGET_BRANCH"
+              
+              if git commit -m "chore: update workflows from central repository" 2>&1; then
+                echo "✓ Commit created successfully"
+              else
+                echo "❌ Failed to create commit"
+                cd ..
+                rm -rf "temp-${repo##*/}"
+                continue
+              fi
+              
+              echo "→ Pushing to $TARGET_BRANCH..."
+              if git push origin "$TARGET_BRANCH" 2>&1; then
+                echo "✓ Successfully pushed workflows to $TARGET_BRANCH"
+              else
+                echo "❌ Failed to push to $TARGET_BRANCH"
+              fi
             else
-              echo "  ○ No changes needed in $TARGET_BRANCH"
+              echo "○ No changes needed in $TARGET_BRANCH"
             fi
             
             cd ..
