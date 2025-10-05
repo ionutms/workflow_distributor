@@ -189,7 +189,7 @@ jobs:
               error_msg=$(echo "$merge_response" | jq -r '.message // "Unknown error"')
               
               # Check if already up to date
-              if [[ "$error_msg" == *"Already up to date"* ]] || [[ "$error_msg" == *"already contains"* ]]; then
+              if [[ "$error_msg" == *"Already up to date"* ]] || [[ "$error_msg" == *"already contains"* ]] || [[ -z "$error_msg" ]]; then
                 echo "  ○ doc_workflow already up to date with main"
               # Check if there's a conflict
               elif [[ "$error_msg" == *"Merge conflict"* ]] || [[ "$error_msg" == *"conflict"* ]]; then
