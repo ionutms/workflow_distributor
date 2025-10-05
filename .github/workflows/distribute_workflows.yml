@@ -5,12 +5,6 @@ on:
     branches:
       - distribute
   workflow_dispatch:
-    inputs:
-      auto_merge:
-        description: 'Auto-merge doc_workflow to main'
-        required: false
-        type: boolean
-        default: true
 
 jobs:
   distribute:
@@ -24,7 +18,7 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-      - name: Distribute workflows to doc_workflow branch
+      - name: Distribute workflows to main branch
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
@@ -49,7 +43,7 @@ jobs:
           )
           
           # Target branch for workflow distribution
-          TARGET_BRANCH="doc_workflow"
+          TARGET_BRANCH="main"
           
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
@@ -69,9 +63,6 @@ jobs:
           echo "Found workflows:"
           ls -la "$WORKFLOW_DIR"
           echo ""
-          
-          # Store repos that had changes
-          echo "" > /tmp/changed_repos.txt
           
           # Process each repository
           for repo in "${REPOS[@]}"; do
@@ -123,7 +114,6 @@ jobs:
               echo "→ Pushing to $TARGET_BRANCH..."
               if git push origin "$TARGET_BRANCH" 2>&1; then
                 echo "✓ Successfully pushed workflows to $TARGET_BRANCH"
-                echo "$repo" >> /tmp/changed_repos.txt
               else
                 echo "❌ Failed to push to $TARGET_BRANCH"
               fi
@@ -137,95 +127,5 @@ jobs:
           done
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Workflow distribution to doc_workflow completed!"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Create and merge PR to main
-        if: github.event.inputs.auto_merge != 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
-        run: |
-          REPOS=(
-            "ionutms/Minimal_ADP1032"
-            "ionutms/Minimal_ADP1074"
-          )
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Creating PRs: doc_workflow → main"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          for repo in "${REPOS[@]}"; do
-            echo ""
-            echo "Repository: $repo"
-            
-            # Check if this repo had changes
-            if ! grep -q "$repo" /tmp/changed_repos.txt; then
-              echo "  ○ No changes to merge"
-              continue
-            fi
-            
-            # Create PR
-            pr_response=$(curl -s -X POST \
-              -H "Authorization: token ${GITHUB_TOKEN}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${repo}/pulls" \
-              -d '{
-                "title": "chore: update workflows from central repository",
-                "head": "doc_workflow",
-                "base": "main",
-                "body": "Automated workflow sync from workflow-distributor"
-              }')
-            
-            pr_number=$(echo "$pr_response" | jq -r '.number // empty')
-            
-            if [ -z "$pr_number" ]; then
-              error_msg=$(echo "$pr_response" | jq -r '.message // "Unknown error"')
-              echo "  ✗ Failed to create PR: $error_msg"
-              
-              # If PR already exists or no changes, try direct merge
-              if [[ "$error_msg" == *"No commits"* ]] || [[ "$error_msg" == *"pull request already exists"* ]]; then
-                echo "  → Attempting direct merge..."
-                merge_response=$(curl -s -X POST \
-                  -H "Authorization: token ${GITHUB_TOKEN}" \
-                  -H "Accept: application/vnd.github.v3+json" \
-                  "https://api.github.com/repos/${repo}/merges" \
-                  -d '{
-                    "base": "main",
-                    "head": "doc_workflow",
-                    "commit_message": "chore: sync workflows from doc_workflow"
-                  }')
-                
-                if echo "$merge_response" | jq -e '.sha' > /dev/null 2>&1; then
-                  echo "  ✓ Successfully merged doc_workflow → main"
-                else
-                  echo "  ○ Branches already in sync"
-                fi
-              fi
-              continue
-            fi
-            
-            echo "  ✓ PR #$pr_number created"
-            
-            # Merge the PR immediately
-            echo "  → Merging PR..."
-            merge_response=$(curl -s -X PUT \
-              -H "Authorization: token ${GITHUB_TOKEN}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${repo}/pulls/${pr_number}/merge" \
-              -d '{
-                "merge_method": "merge"
-              }')
-            
-            if echo "$merge_response" | jq -e '.merged' | grep -q true; then
-              echo "  ✓ PR #$pr_number merged successfully"
-            else
-              error_msg=$(echo "$merge_response" | jq -r '.message // "Unknown error"')
-              echo "  ✗ Failed to merge PR: $error_msg"
-            fi
-          done
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "PR merge completed!"
+          echo "Workflow distribution to main completed!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
