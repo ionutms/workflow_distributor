@@ -21,6 +21,7 @@ jobs:
           # Format: "repo:branch1,branch2,branch3"
           REPO_BRANCHES=(
             "ionutms/Minimal_ADP1032:main,doc_workflow"
+            "ionutms/Minimal_ADP1074:main,doc_workflow"
           )
           
           # Directory containing workflow templates
