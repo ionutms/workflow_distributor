@@ -99,12 +99,20 @@ jobs:
               continue
             fi
             
+            # Copy kicad-config.yml to .github directory
+            echo "→ Copying kicad-config.yml file..."
+            if cp -v "../configs/kicad-config.yml" .github/ 2>&1; then
+              echo "✓ kicad-config.yml copied successfully"
+            else
+              echo "○ kicad-config.yml not found in source, skipping..."
+            fi
+            
             # Check if there are changes
             if [[ -n $(git status -s) ]]; then
               echo "→ Committing changes..."
-              git add .github/workflows
+              git add .github/workflows .github/kicad-config.yml
               
-              if git commit -m "chore: update workflows from central repository" 2>&1; then
+              if git commit -m "chore: update workflows and kicad config from central repository" 2>&1; then
                 echo "✓ Commit created successfully"
               else
                 echo "❌ Failed to create commit"
@@ -115,7 +123,7 @@ jobs:
               
               echo "→ Pushing to $TARGET_BRANCH..."
               if git push origin "$TARGET_BRANCH" 2>&1; then
-                echo "✓ Successfully pushed workflows to $TARGET_BRANCH"
+                echo "✓ Successfully pushed workflows and kicad config to $TARGET_BRANCH"
               else
                 echo "❌ Failed to push to $TARGET_BRANCH"
               fi
