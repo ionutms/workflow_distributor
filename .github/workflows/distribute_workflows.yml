@@ -5,6 +5,12 @@ on:
     branches:
       - distribute
   workflow_dispatch:
+    inputs:
+      sync_to_main:
+        description: 'Sync doc_workflow to main after distribution'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   distribute:
@@ -13,16 +19,18 @@ jobs:
       - name: Checkout source repository
         uses: actions/checkout@v4
 
-      - name: Distribute workflows via GitHub API
+      - name: Distribute workflows to doc_workflow branch
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
-          # Define target repositories with their branches
-          # Format: "repo:branch1,branch2,branch3"
-          REPO_BRANCHES=(
-            "ionutms/Minimal_ADP1032:main,doc_workflow"
-            "ionutms/Minimal_ADP1074:main,doc_workflow"
+          # Define target repositories
+          REPOS=(
+            "ionutms/Minimal_ADP1032"
+            "ionutms/Minimal_ADP1074"
           )
+          
+          # Target branch for workflow distribution
+          TARGET_BRANCH="doc_workflow"
           
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
@@ -60,55 +68,96 @@ jobs:
               -d "$json_payload"
           }
           
-          # Process each repository and its branches
-          for repo_branch in "${REPO_BRANCHES[@]}"; do
-            # Split repo and branches
-            IFS=':' read -r repo branches <<< "$repo_branch"
-            
+          # Process each repository
+          for repo in "${REPOS[@]}"; do
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Processing repository: $repo"
+            echo "Target branch: $TARGET_BRANCH"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             
-            # Split branches by comma
-            IFS=',' read -ra BRANCH_ARRAY <<< "$branches"
-            
-            for branch in "${BRANCH_ARRAY[@]}"; do
-              echo "  Branch: $branch"
-              echo "  ────────────────────────────────────────"
-              
-              # Process each workflow file
-              for workflow_file in "${WORKFLOW_DIR}"/*; do
-                if [ -f "$workflow_file" ]; then
-                  filename=$(basename "$workflow_file")
-                  target_path=".github/workflows/${filename}"
-                  
-                  echo "    → Processing: $filename"
-                  
-                  # Encode file content to base64
-                  content=$(base64 -w 0 "$workflow_file")
-                  
-                  # Get existing file SHA (if it exists)
-                  sha=$(get_file_sha "$repo" "$target_path" "$branch")
-                  
-                  # Create or update the file
-                  response=$(update_file "$repo" "$target_path" "$content" "$sha" "$branch")
-                  
-                  if echo "$response" | jq -e '.content' > /dev/null 2>&1; then
-                    if [ -z "$sha" ]; then
-                      echo "      ✓ Created: $target_path"
-                    else
-                      echo "      ✓ Updated: $target_path"
-                    fi
+            # Process each workflow file
+            for workflow_file in "${WORKFLOW_DIR}"/*; do
+              if [ -f "$workflow_file" ]; then
+                filename=$(basename "$workflow_file")
+                target_path=".github/workflows/${filename}"
+                
+                echo "  → Processing: $filename"
+                
+                # Encode file content to base64
+                content=$(base64 -w 0 "$workflow_file")
+                
+                # Get existing file SHA (if it exists)
+                sha=$(get_file_sha "$repo" "$target_path" "$TARGET_BRANCH")
+                
+                # Create or update the file
+                response=$(update_file "$repo" "$target_path" "$content" "$sha" "$TARGET_BRANCH")
+                
+                if echo "$response" | jq -e '.content' > /dev/null 2>&1; then
+                  if [ -z "$sha" ]; then
+                    echo "    ✓ Created: $target_path"
                   else
-                    error_msg=$(echo "$response" | jq -r '.message // "Unknown error"')
-                    echo "      ✗ Failed: $error_msg"
+                    echo "    ✓ Updated: $target_path"
                   fi
+                else
+                  error_msg=$(echo "$response" | jq -r '.message // "Unknown error"')
+                  echo "    ✗ Failed: $error_msg"
                 fi
-              done
-              echo ""
+              fi
             done
+            echo ""
           done
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Workflow distribution completed!"
+          echo "Workflow distribution to doc_workflow completed!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Sync doc_workflow to main
+        if: github.event.inputs.sync_to_main != 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
+        run: |
+          REPOS=(
+            "ionutms/Minimal_ADP1032"
+            "ionutms/Minimal_ADP1074"
+          )
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Syncing doc_workflow → main"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          for repo in "${REPOS[@]}"; do
+            echo ""
+            echo "Repository: $repo"
+            
+            # Get the latest commit SHA from doc_workflow
+            doc_workflow_sha=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${repo}/git/ref/heads/doc_workflow" \
+              | jq -r '.object.sha')
+            
+            if [ "$doc_workflow_sha" = "null" ] || [ -z "$doc_workflow_sha" ]; then
+              echo "  ✗ Failed: Could not get doc_workflow SHA"
+              continue
+            fi
+            
+            echo "  doc_workflow SHA: ${doc_workflow_sha:0:7}"
+            
+            # Update main branch to point to doc_workflow commit
+            response=$(curl -s -X PATCH \
+              -H "Authorization: token ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${repo}/git/refs/heads/main" \
+              -d "{\"sha\": \"$doc_workflow_sha\", \"force\": true}")
+            
+            if echo "$response" | jq -e '.object.sha' > /dev/null 2>&1; then
+              echo "  ✓ Successfully synced doc_workflow → main"
+            else
+              error_msg=$(echo "$response" | jq -r '.message // "Unknown error"')
+              echo "  ✗ Failed to sync: $error_msg"
+            fi
+          done
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Branch sync completed!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
