@@ -6,6 +6,25 @@ on:
       - distribute
   workflow_dispatch:
 
+env:
+  TARGET_REPOS: >-
+    ionutms/Minimal_AD74416H
+    ionutms/AD74416H_Power_Interface_Module
+    ionutms/Modular_AD74416H_PLC
+    ionutms/Minimal_ADP1074
+    ionutms/Minimal_ADPL76030
+    ionutms/Minimal_ADP1032
+    ionutms/Minimal_MAX14906
+    ionutms/Minimal_AD74413R
+    ionutms/Modular_Software_Configurable_IO_PLC
+    ionutms/Minimal_ADIN1110
+    ionutms/Minimal_LTC9111
+    ionutms/Minimal_MAX17761
+    ionutms/Minimal_LT8304
+    ionutms/Minimal_MAX32650
+    ionutms/Minimal_ADP1031
+    ionutms/Minimal_MAX17570
+
 jobs:
   distribute:
     runs-on: ubuntu-latest
@@ -22,25 +41,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
-          # Define target repositories
-          REPOS=(
-            "ionutms/Minimal_AD74416H"
-            "ionutms/AD74416H_Power_Interface_Module"
-            "ionutms/Modular_AD74416H_PLC"
-            "ionutms/Minimal_ADP1074"
-            "ionutms/Minimal_ADPL76030"
-            "ionutms/Minimal_ADP1032"
-            "ionutms/Minimal_MAX14906"
-            "ionutms/Minimal_AD74413R"
-            "ionutms/Modular_Software_Configurable_IO_PLC"
-            "ionutms/Minimal_ADIN1110"
-            "ionutms/Minimal_LTC9111"
-            "ionutms/Minimal_MAX17761"
-            "ionutms/Minimal_LT8304"
-            "ionutms/Minimal_MAX32650"
-            "ionutms/Minimal_ADP1031"
-            "ionutms/Minimal_MAX17570"
-          )
+          # Convert TARGET_REPOS to array
+          REPOS=($TARGET_REPOS)
           
           # Target branch for workflow distribution
           TARGET_BRANCH="main"
@@ -128,4 +130,92 @@ jobs:
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "Workflow distribution to main completed!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Sync main to doc_workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
+        run: |
+          # Convert TARGET_REPOS to array
+          REPOS=($TARGET_REPOS)
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Syncing main → doc_workflow"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          for repo in "${REPOS[@]}"; do
+            echo ""
+            echo "Repository: $repo"
+            
+            # Check if doc_workflow branch exists
+            doc_workflow_exists=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${repo}/git/ref/heads/doc_workflow" \
+              | jq -r '.ref // empty')
+            
+            if [ -z "$doc_workflow_exists" ]; then
+              echo "  ⚠ doc_workflow branch does not exist, skipping..."
+              continue
+            fi
+            
+            # Get the latest commit SHA from main
+            main_sha=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${repo}/git/ref/heads/main" \
+              | jq -r '.object.sha')
+            
+            if [ "$main_sha" = "null" ] || [ -z "$main_sha" ]; then
+              echo "  ✗ Failed: Could not get main SHA"
+              continue
+            fi
+            
+            echo "  main SHA: ${main_sha:0:7}"
+            
+            # Try to merge main into doc_workflow
+            merge_response=$(curl -s -X POST \
+              -H "Authorization: token ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${repo}/merges" \
+              -d "{
+                \"base\": \"doc_workflow\",
+                \"head\": \"main\",
+                \"commit_message\": \"chore: sync workflows from main\"
+              }")
+            
+            if echo "$merge_response" | jq -e '.sha' > /dev/null 2>&1; then
+              merge_sha=$(echo "$merge_response" | jq -r '.sha')
+              echo "  ✓ Successfully merged main → doc_workflow"
+              echo "  Merge commit: ${merge_sha:0:7}"
+            else
+              error_msg=$(echo "$merge_response" | jq -r '.message // "Unknown error"')
+              
+              # Check if already up to date
+              if [[ "$error_msg" == *"Already up to date"* ]] || [[ "$error_msg" == *"already contains"* ]]; then
+                echo "  ○ doc_workflow already up to date with main"
+              # Check if there's a conflict
+              elif [[ "$error_msg" == *"Merge conflict"* ]] || [[ "$error_msg" == *"conflict"* ]]; then
+                echo "  ⚠ Merge conflict detected - using force update"
+                echo "  → Forcing doc_workflow to match main..."
+                
+                # Force update doc_workflow to match main (this will overwrite conflicts)
+                force_response=$(curl -s -X PATCH \
+                  -H "Authorization: token ${GITHUB_TOKEN}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/${repo}/git/refs/heads/doc_workflow" \
+                  -d "{\"sha\": \"$main_sha\", \"force\": true}")
+                
+                if echo "$force_response" | jq -e '.object.sha' > /dev/null 2>&1; then
+                  echo "  ✓ Force updated doc_workflow to match main"
+                else
+                  force_error=$(echo "$force_response" | jq -r '.message // "Unknown error"')
+                  echo "  ✗ Failed to force update: $force_error"
+                fi
+              else
+                echo "  ✗ Failed to merge: $error_msg"
+              fi
+            fi
+          done
+          
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Sync to doc_workflow completed!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
