@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - distribute
-  workflow_dispatch:
+    paths:
+      - 'workflows/**'  # Trigger only when workflow templates change
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   distribute:
@@ -17,10 +19,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
-          # Define target repositories
-          REPOS=(
-            "ionutms/Minimal_ADP1032"
-            "ionutms/Minimal_ADP1074"
+          # Define target repositories with their branches
+          # Format: "repo:branch1,branch2,branch3"
+          REPO_BRANCHES=(
+            "ionutms/Minimal_ADP1032:main,doc_workflow"
           )
           
           # Directory containing workflow templates
@@ -30,8 +32,9 @@ jobs:
           get_file_sha() {
             local repo=$1
             local path=$2
+            local branch=$3
             curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
-              "https://api.github.com/repos/${repo}/contents/${path}" \
+              "https://api.github.com/repos/${repo}/contents/${path}?ref=${branch}" \
               | jq -r '.sha // empty'
           }
           
@@ -41,7 +44,7 @@ jobs:
             local path=$2
             local content=$3
             local sha=$4
-            local branch="main"  # Change this to your target branch
+            local branch=$5
             
             local message="Update workflow: ${path##*/}"
             local json_payload=$(jq -n \
@@ -58,43 +61,53 @@ jobs:
               -d "$json_payload"
           }
           
-          # Process each repository
-          for repo in "${REPOS[@]}"; do
+          # Process each repository and its branches
+          for repo_branch in "${REPO_BRANCHES[@]}"; do
+            # Split repo and branches
+            IFS=':' read -r repo branches <<< "$repo_branch"
+            
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Processing repository: $repo"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             
-            # Process each workflow file
-            for workflow_file in "${WORKFLOW_DIR}"/*; do
-              if [ -f "$workflow_file" ]; then
-                filename=$(basename "$workflow_file")
-                target_path=".github/workflows/${filename}"
-                
-                echo "  → Processing: $filename"
-                
-                # Encode file content to base64
-                content=$(base64 -w 0 "$workflow_file")
-                
-                # Get existing file SHA (if it exists)
-                sha=$(get_file_sha "$repo" "$target_path")
-                
-                # Create or update the file
-                response=$(update_file "$repo" "$target_path" "$content" "$sha")
-                
-                if echo "$response" | jq -e '.content' > /dev/null 2>&1; then
-                  if [ -z "$sha" ]; then
-                    echo "    ✓ Created: $target_path"
-                  else
-                    echo "    ✓ Updated: $target_path"
-                  fi
-                else
-                  error_msg=$(echo "$response" | jq -r '.message // "Unknown error"')
-                  echo "    ✗ Failed: $error_msg"
-                fi
-              fi
-            done
+            # Split branches by comma
+            IFS=',' read -ra BRANCH_ARRAY <<< "$branches"
             
-            echo ""
+            for branch in "${BRANCH_ARRAY[@]}"; do
+              echo "  Branch: $branch"
+              echo "  ────────────────────────────────────────"
+              
+              # Process each workflow file
+              for workflow_file in "${WORKFLOW_DIR}"/*; do
+                if [ -f "$workflow_file" ]; then
+                  filename=$(basename "$workflow_file")
+                  target_path=".github/workflows/${filename}"
+                  
+                  echo "    → Processing: $filename"
+                  
+                  # Encode file content to base64
+                  content=$(base64 -w 0 "$workflow_file")
+                  
+                  # Get existing file SHA (if it exists)
+                  sha=$(get_file_sha "$repo" "$target_path" "$branch")
+                  
+                  # Create or update the file
+                  response=$(update_file "$repo" "$target_path" "$content" "$sha" "$branch")
+                  
+                  if echo "$response" | jq -e '.content' > /dev/null 2>&1; then
+                    if [ -z "$sha" ]; then
+                      echo "      ✓ Created: $target_path"
+                    else
+                      echo "      ✓ Updated: $target_path"
+                    fi
+                  else
+                    error_msg=$(echo "$response" | jq -r '.message // "Unknown error"')
+                    echo "      ✗ Failed: $error_msg"
+                  fi
+                fi
+              done
+              echo ""
+            done
           done
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
