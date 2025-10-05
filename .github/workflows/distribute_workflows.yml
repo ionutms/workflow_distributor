@@ -1,0 +1,103 @@
+name: Distribute Workflows
+
+on:
+  push:
+    branches:
+      - distribute
+    paths:
+      - 'workflows/**'  # Trigger only when workflow templates change
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  distribute:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+
+      - name: Distribute workflows via GitHub API
+        env:
+          GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
+        run: |
+          # Define target repositories
+          REPOS=(
+            "ionutms/Minimal_ADP1032"
+          )
+          
+          # Directory containing workflow templates
+          WORKFLOW_DIR="workflows"
+          
+          # Function to get file SHA (needed for updates)
+          get_file_sha() {
+            local repo=$1
+            local path=$2
+            curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${repo}/contents/${path}" \
+              | jq -r '.sha // empty'
+          }
+          
+          # Function to create/update file via API
+          update_file() {
+            local repo=$1
+            local path=$2
+            local content=$3
+            local sha=$4
+            local branch="main"  # Change this to your target branch
+            
+            local message="Update workflow: ${path##*/}"
+            local json_payload=$(jq -n \
+              --arg msg "$message" \
+              --arg content "$content" \
+              --arg sha "$sha" \
+              --arg branch "$branch" \
+              '{message: $msg, content: $content, branch: $branch} + (if $sha != "" then {sha: $sha} else {} end)')
+            
+            curl -s -X PUT \
+              -H "Authorization: token ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${repo}/contents/${path}" \
+              -d "$json_payload"
+          }
+          
+          # Process each repository
+          for repo in "${REPOS[@]}"; do
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Processing repository: $repo"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            
+            # Process each workflow file
+            for workflow_file in "${WORKFLOW_DIR}"/*; do
+              if [ -f "$workflow_file" ]; then
+                filename=$(basename "$workflow_file")
+                target_path=".github/workflows/${filename}"
+                
+                echo "  → Processing: $filename"
+                
+                # Encode file content to base64
+                content=$(base64 -w 0 "$workflow_file")
+                
+                # Get existing file SHA (if it exists)
+                sha=$(get_file_sha "$repo" "$target_path")
+                
+                # Create or update the file
+                response=$(update_file "$repo" "$target_path" "$content" "$sha")
+                
+                if echo "$response" | jq -e '.content' > /dev/null 2>&1; then
+                  if [ -z "$sha" ]; then
+                    echo "    ✓ Created: $target_path"
+                  else
+                    echo "    ✓ Updated: $target_path"
+                  fi
+                else
+                  error_msg=$(echo "$response" | jq -r '.message // "Unknown error"')
+                  echo "    ✗ Failed: $error_msg"
+                fi
+              fi
+            done
+            
+            echo ""
+          done
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Workflow distribution completed!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
