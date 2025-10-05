@@ -53,7 +53,7 @@ jobs:
             local sha=$4
             local branch=$5
             
-            local message="Update workflow: ${path##*/}"
+            local message="chore: update workflows from central repository"
             local json_payload=$(jq -n \
               --arg msg "$message" \
               --arg content "$content" \
