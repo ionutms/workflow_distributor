@@ -120,7 +120,7 @@ jobs:
                 git add .github/kicad-config.yml
               fi
               
-              if git commit -m "chore: update workflows from central repository" 2>&1; then
+              if git commit -m "chore: update workflows and kicad config from central repository" 2>&1; then
                 echo "✓ Commit created successfully"
               else
                 echo "❌ Failed to create commit"
@@ -135,9 +135,6 @@ jobs:
               else
                 echo "❌ Failed to push to $TARGET_BRANCH"
               fi
-            else
-              echo "○ No changes needed in $TARGET_BRANCH"
-            fi
             else
               echo "○ No changes needed in $TARGET_BRANCH"
             fi
