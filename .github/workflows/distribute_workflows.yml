@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - distribute
-    paths:
-      - 'workflows/**'  # Trigger only when workflow templates change
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
