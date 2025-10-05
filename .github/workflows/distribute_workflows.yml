@@ -6,8 +6,8 @@ on:
       - distribute
   workflow_dispatch:
     inputs:
-      sync_to_main:
-        description: 'Sync doc_workflow to main after distribution'
+      auto_merge:
+        description: 'Auto-merge doc_workflow to main'
         required: false
         type: boolean
         default: true
@@ -32,7 +32,6 @@ jobs:
           REPOS=(
             "ionutms/Minimal_ADP1032"
             "ionutms/Minimal_ADP1074"
-            "ionutms/Minimal_MAX14906"
           )
           
           # Target branch for workflow distribution
@@ -56,6 +55,9 @@ jobs:
           echo "Found workflows:"
           ls -la "$WORKFLOW_DIR"
           echo ""
+          
+          # Store repos that had changes
+          echo "" > /tmp/changed_repos.txt
           
           # Process each repository
           for repo in "${REPOS[@]}"; do
@@ -90,12 +92,6 @@ jobs:
               continue
             fi
             
-            # Show git status
-            echo ""
-            echo "→ Git status:"
-            git status
-            echo ""
-            
             # Check if there are changes
             if [[ -n $(git status -s) ]]; then
               echo "→ Committing changes..."
@@ -113,6 +109,7 @@ jobs:
               echo "→ Pushing to $TARGET_BRANCH..."
               if git push origin "$TARGET_BRANCH" 2>&1; then
                 echo "✓ Successfully pushed workflows to $TARGET_BRANCH"
+                echo "$repo" >> /tmp/changed_repos.txt
               else
                 echo "❌ Failed to push to $TARGET_BRANCH"
               fi
@@ -129,8 +126,8 @@ jobs:
           echo "Workflow distribution to doc_workflow completed!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      - name: Sync doc_workflow to main
-        if: github.event.inputs.sync_to_main != 'false'
+      - name: Create and merge PR to main
+        if: github.event.inputs.auto_merge != 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
@@ -141,41 +138,80 @@ jobs:
           
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Syncing doc_workflow → main"
+          echo "Creating PRs: doc_workflow → main"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
           for repo in "${REPOS[@]}"; do
             echo ""
             echo "Repository: $repo"
             
-            # Get the latest commit SHA from doc_workflow
-            doc_workflow_sha=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
-              "https://api.github.com/repos/${repo}/git/ref/heads/doc_workflow" \
-              | jq -r '.object.sha')
-            
-            if [ "$doc_workflow_sha" = "null" ] || [ -z "$doc_workflow_sha" ]; then
-              echo "  ✗ Failed: Could not get doc_workflow SHA"
+            # Check if this repo had changes
+            if ! grep -q "$repo" /tmp/changed_repos.txt; then
+              echo "  ○ No changes to merge"
               continue
             fi
             
-            echo "  doc_workflow SHA: ${doc_workflow_sha:0:7}"
-            
-            # Update main branch to point to doc_workflow commit
-            response=$(curl -s -X PATCH \
+            # Create PR
+            pr_response=$(curl -s -X POST \
               -H "Authorization: token ${GITHUB_TOKEN}" \
               -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${repo}/git/refs/heads/main" \
-              -d "{\"sha\": \"$doc_workflow_sha\", \"force\": true}")
+              "https://api.github.com/repos/${repo}/pulls" \
+              -d '{
+                "title": "chore: update workflows from central repository",
+                "head": "doc_workflow",
+                "base": "main",
+                "body": "Automated workflow sync from workflow-distributor"
+              }')
             
-            if echo "$response" | jq -e '.object.sha' > /dev/null 2>&1; then
-              echo "  ✓ Successfully synced doc_workflow → main"
+            pr_number=$(echo "$pr_response" | jq -r '.number // empty')
+            
+            if [ -z "$pr_number" ]; then
+              error_msg=$(echo "$pr_response" | jq -r '.message // "Unknown error"')
+              echo "  ✗ Failed to create PR: $error_msg"
+              
+              # If PR already exists or no changes, try direct merge
+              if [[ "$error_msg" == *"No commits"* ]] || [[ "$error_msg" == *"pull request already exists"* ]]; then
+                echo "  → Attempting direct merge..."
+                merge_response=$(curl -s -X POST \
+                  -H "Authorization: token ${GITHUB_TOKEN}" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  "https://api.github.com/repos/${repo}/merges" \
+                  -d '{
+                    "base": "main",
+                    "head": "doc_workflow",
+                    "commit_message": "chore: sync workflows from doc_workflow"
+                  }')
+                
+                if echo "$merge_response" | jq -e '.sha' > /dev/null 2>&1; then
+                  echo "  ✓ Successfully merged doc_workflow → main"
+                else
+                  echo "  ○ Branches already in sync"
+                fi
+              fi
+              continue
+            fi
+            
+            echo "  ✓ PR #$pr_number created"
+            
+            # Merge the PR immediately
+            echo "  → Merging PR..."
+            merge_response=$(curl -s -X PUT \
+              -H "Authorization: token ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${repo}/pulls/${pr_number}/merge" \
+              -d '{
+                "merge_method": "merge"
+              }')
+            
+            if echo "$merge_response" | jq -e '.merged' | grep -q true; then
+              echo "  ✓ PR #$pr_number merged successfully"
             else
-              error_msg=$(echo "$response" | jq -r '.message // "Unknown error"')
-              echo "  ✗ Failed to sync: $error_msg"
+              error_msg=$(echo "$merge_response" | jq -r '.message // "Unknown error"')
+              echo "  ✗ Failed to merge PR: $error_msg"
             fi
           done
           
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Branch sync completed!"
+          echo "PR merge completed!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
