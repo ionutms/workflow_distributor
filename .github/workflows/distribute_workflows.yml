@@ -22,6 +22,7 @@ jobs:
           # Define target repositories
           REPOS=(
             "ionutms/Minimal_ADP1032"
+            "ionutms/Minimal_ADP1074"
           )
           
           # Directory containing workflow templates
