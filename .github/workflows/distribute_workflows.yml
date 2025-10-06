@@ -9,21 +9,21 @@ on:
 env:
   TARGET_REPOS: >-
     ionutms/Minimal_AD74416H
-    # ionutms/AD74416H_Power_Interface_Module
-    # ionutms/Modular_AD74416H_PLC
-    # ionutms/Minimal_ADP1074
-    # ionutms/Minimal_ADPL76030
-    # ionutms/Minimal_ADP1032
-    # ionutms/Minimal_MAX14906
-    # ionutms/Minimal_AD74413R
-    # ionutms/Modular_Software_Configurable_IO_PLC
-    # ionutms/Minimal_ADIN1110
-    # ionutms/Minimal_LTC9111
-    # ionutms/Minimal_MAX17761
-    # ionutms/Minimal_LT8304
-    # ionutms/Minimal_MAX32650
-    # ionutms/Minimal_ADP1031
-    # ionutms/Minimal_MAX17570
+    ionutms/AD74416H_Power_Interface_Module
+    ionutms/Modular_AD74416H_PLC
+    ionutms/Minimal_ADP1074
+    ionutms/Minimal_ADPL76030
+    ionutms/Minimal_ADP1032
+    ionutms/Minimal_MAX14906
+    ionutms/Minimal_AD74413R
+    ionutms/Modular_Software_Configurable_IO_PLC
+    ionutms/Minimal_ADIN1110
+    ionutms/Minimal_LTC9111
+    ionutms/Minimal_MAX17761
+    ionutms/Minimal_LT8304
+    ionutms/Minimal_MAX32650
+    ionutms/Minimal_ADP1031
+    ionutms/Minimal_MAX17570
 
 jobs:
   distribute:
