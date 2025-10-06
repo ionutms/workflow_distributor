@@ -9,21 +9,21 @@ on:
 env:
   TARGET_REPOS: >-
     ionutms/Minimal_AD74416H
-    ionutms/AD74416H_Power_Interface_Module
-    ionutms/Modular_AD74416H_PLC
-    ionutms/Minimal_ADP1074
-    ionutms/Minimal_ADPL76030
-    ionutms/Minimal_ADP1032
-    ionutms/Minimal_MAX14906
-    ionutms/Minimal_AD74413R
-    ionutms/Modular_Software_Configurable_IO_PLC
-    ionutms/Minimal_ADIN1110
-    ionutms/Minimal_LTC9111
-    ionutms/Minimal_MAX17761
-    ionutms/Minimal_LT8304
-    ionutms/Minimal_MAX32650
-    ionutms/Minimal_ADP1031
-    ionutms/Minimal_MAX17570
+    # ionutms/AD74416H_Power_Interface_Module
+    # ionutms/Modular_AD74416H_PLC
+    # ionutms/Minimal_ADP1074
+    # ionutms/Minimal_ADPL76030
+    # ionutms/Minimal_ADP1032
+    # ionutms/Minimal_MAX14906
+    # ionutms/Minimal_AD74413R
+    # ionutms/Modular_Software_Configurable_IO_PLC
+    # ionutms/Minimal_ADIN1110
+    # ionutms/Minimal_LTC9111
+    # ionutms/Minimal_MAX17761
+    # ionutms/Minimal_LT8304
+    # ionutms/Minimal_MAX32650
+    # ionutms/Minimal_ADP1031
+    # ionutms/Minimal_MAX17570
 
 jobs:
   distribute:
@@ -37,15 +37,12 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-      - name: Distribute workflows to main branch
+      - name: Distribute workflows and sync branches
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
           # Convert TARGET_REPOS to array
           REPOS=($TARGET_REPOS)
-          
-          # Target branch for workflow distribution
-          TARGET_BRANCH="main"
           
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
@@ -70,26 +67,26 @@ jobs:
           for repo in "${REPOS[@]}"; do
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Processing repository: $repo"
-            echo "Target branch: $TARGET_BRANCH"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             
-            # Clone the target repository
+            # Clone the target repository (fetch both main and doc_workflow)
             echo "→ Cloning repository..."
-            if ! git clone --branch "$TARGET_BRANCH" --single-branch \
-              "https://x-access-token:${GITHUB_TOKEN}@github.com/${repo}.git" \
-              "temp-${repo##*/}" 2>&1; then
-              echo "❌ Failed to clone $repo on branch $TARGET_BRANCH"
-              echo "   Make sure the branch exists and you have access"
+            if ! git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${repo}.git" "temp-${repo##*/}" 2>&1; then
+              echo "❌ Failed to clone $repo"
+              echo "   Make sure you have access"
               continue
             fi
             
             cd "temp-${repo##*/}"
             
+            # Checkout main branch
+            git checkout main
+            
             # Create .github/workflows directory if it doesn't exist
             mkdir -p .github/workflows
             
             # Copy all workflow files
-            echo "→ Copying workflow files..."
+            echo "→ Copying workflow files to main..."
             if cp -v "../${WORKFLOW_DIR}"/* .github/workflows/ 2>&1; then
               echo "✓ Files copied successfully"
             else
@@ -111,9 +108,9 @@ jobs:
               echo "○ kicad-config.yml already exists in target repository, skipping..."
             fi
             
-            # Check if there are changes
+            # Check if there are changes on main
             if [[ -n $(git status -s) ]]; then
-              echo "→ Committing changes..."
+              echo "→ Committing changes to main..."
               git add .github/workflows
               # Only add kicad-config.yml if we just copied it
               if [ -f ".github/kicad-config.yml" ]; then
@@ -121,7 +118,7 @@ jobs:
               fi
               
               if git commit -m "chore: update workflows and kicad config from central repository" 2>&1; then
-                echo "✓ Commit created successfully"
+                echo "✓ Commit created on main"
               else
                 echo "❌ Failed to create commit"
                 cd ..
@@ -129,14 +126,64 @@ jobs:
                 continue
               fi
               
-              echo "→ Pushing to $TARGET_BRANCH..."
-              if git push origin "$TARGET_BRANCH" 2>&1; then
-                echo "✓ Successfully pushed workflows to $TARGET_BRANCH"
+              echo "→ Pushing main..."
+              if git push origin main 2>&1; then
+                echo "✓ Successfully pushed to main"
               else
-                echo "❌ Failed to push to $TARGET_BRANCH"
+                echo "❌ Failed to push to main"
+                cd ..
+                rm -rf "temp-${repo##*/}"
+                continue
               fi
             else
-              echo "○ No changes needed in $TARGET_BRANCH"
+              echo "○ No changes needed on main"
+            fi
+            
+            # Now handle doc_workflow branch
+            echo ""
+            echo "→ Switching to doc_workflow branch..."
+            
+            # Check if doc_workflow branch exists remotely
+            if git ls-remote --heads origin doc_workflow | grep -q doc_workflow; then
+              # Checkout existing doc_workflow branch
+              if git checkout doc_workflow 2>&1; then
+                echo "✓ Checked out doc_workflow branch"
+                
+                # Pull latest from main
+                echo "→ Pulling changes from main..."
+                if git pull origin main --no-edit 2>&1; then
+                  echo "✓ Successfully pulled from main to doc_workflow"
+                  
+                  # Push updated doc_workflow
+                  echo "→ Pushing doc_workflow..."
+                  if git push origin doc_workflow 2>&1; then
+                    echo "✓ Successfully pushed doc_workflow"
+                  else
+                    echo "❌ Failed to push doc_workflow"
+                  fi
+                else
+                  echo "⚠ Pull from main had conflicts or failed"
+                  echo "→ Attempting to reset doc_workflow to match main..."
+                  
+                  # Get main SHA
+                  git checkout main
+                  main_sha=$(git rev-parse HEAD)
+                  
+                  # Force doc_workflow to match main
+                  git checkout doc_workflow
+                  git reset --hard "$main_sha"
+                  
+                  if git push origin doc_workflow --force 2>&1; then
+                    echo "✓ Force updated doc_workflow to match main"
+                  else
+                    echo "❌ Failed to force update doc_workflow"
+                  fi
+                fi
+              else
+                echo "❌ Failed to checkout doc_workflow"
+              fi
+            else
+              echo "○ doc_workflow branch does not exist, skipping..."
             fi
             
             cd ..
@@ -145,93 +192,5 @@ jobs:
           done
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Workflow distribution to main completed!"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Sync main to doc_workflow
-        env:
-          GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
-        run: |
-          # Convert TARGET_REPOS to array
-          REPOS=($TARGET_REPOS)
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Syncing main → doc_workflow"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          for repo in "${REPOS[@]}"; do
-            echo ""
-            echo "Repository: $repo"
-            
-            # Check if doc_workflow branch exists
-            doc_workflow_exists=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
-              "https://api.github.com/repos/${repo}/git/ref/heads/doc_workflow" \
-              | jq -r '.ref // empty')
-            
-            if [ -z "$doc_workflow_exists" ]; then
-              echo "  ⚠ doc_workflow branch does not exist, skipping..."
-              continue
-            fi
-            
-            # Get the latest commit SHA from main
-            main_sha=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
-              "https://api.github.com/repos/${repo}/git/ref/heads/main" \
-              | jq -r '.object.sha')
-            
-            if [ "$main_sha" = "null" ] || [ -z "$main_sha" ]; then
-              echo "  ✗ Failed: Could not get main SHA"
-              continue
-            fi
-            
-            echo "  main SHA: ${main_sha:0:7}"
-            
-            # Try to merge main into doc_workflow
-            merge_response=$(curl -s -X POST \
-              -H "Authorization: token ${GITHUB_TOKEN}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${repo}/merges" \
-              -d "{
-                \"base\": \"doc_workflow\",
-                \"head\": \"main\",
-                \"commit_message\": \"chore: sync workflows from main\"
-              }")
-            
-            if echo "$merge_response" | jq -e '.sha' > /dev/null 2>&1; then
-              merge_sha=$(echo "$merge_response" | jq -r '.sha')
-              echo "  ✓ Successfully merged main → doc_workflow"
-              echo "  Merge commit: ${merge_sha:0:7}"
-            else
-              error_msg=$(echo "$merge_response" | jq -r '.message // "Unknown error"')
-              
-              # Check if already up to date
-              if [[ "$error_msg" == *"Already up to date"* ]] || [[ "$error_msg" == *"already contains"* ]] || [[ -z "$error_msg" ]]; then
-                echo "  ○ doc_workflow already up to date with main"
-              # Check if there's a conflict
-              elif [[ "$error_msg" == *"Merge conflict"* ]] || [[ "$error_msg" == *"conflict"* ]]; then
-                echo "  ⚠ Merge conflict detected - using force update"
-                echo "  → Forcing doc_workflow to match main..."
-                
-                # Force update doc_workflow to match main (this will overwrite conflicts)
-                force_response=$(curl -s -X PATCH \
-                  -H "Authorization: token ${GITHUB_TOKEN}" \
-                  -H "Accept: application/vnd.github.v3+json" \
-                  "https://api.github.com/repos/${repo}/git/refs/heads/doc_workflow" \
-                  -d "{\"sha\": \"$main_sha\", \"force\": true}")
-                
-                if echo "$force_response" | jq -e '.object.sha' > /dev/null 2>&1; then
-                  echo "  ✓ Force updated doc_workflow to match main"
-                else
-                  force_error=$(echo "$force_response" | jq -r '.message // "Unknown error"')
-                  echo "  ✗ Failed to force update: $force_error"
-                fi
-              else
-                echo "  ✗ Failed to merge: $error_msg"
-              fi
-            fi
-          done
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Sync to doc_workflow completed!"
+          echo "Workflow distribution and sync completed!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
