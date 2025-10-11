@@ -1,4 +1,4 @@
-name: Distribute Workflows
+name: Distribute Workflows and Secrets
 
 on:
   push:
@@ -27,8 +27,62 @@ env:
     ionutms/Minimal_MAX17570
 
 jobs:
-  distribute:
+  distribute-secrets:
     runs-on: ubuntu-latest
+    steps:
+      - name: Distribute REPO_DISPATCH_TOKEN to all target repositories
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
+          SECRET_VALUE: ${{ secrets.REPO_DISPATCH_TOKEN }}
+        run: |
+          set +e  # Disable exit on error for the entire script
+          
+          # Convert TARGET_REPOS to array
+          REPOS=($TARGET_REPOS)
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Starting secret distribution to ${#REPOS[@]} repositories"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          
+          SUCCESS_COUNT=0
+          FAIL_COUNT=0
+          
+          # Process each repository
+          for repo in "${REPOS[@]}"; do
+            echo "→ Processing: $repo"
+            
+            # Set secret and capture exit code
+            gh secret set REPO_DISPATCH_TOKEN \
+              --repo "$repo" \
+              --body "$SECRET_VALUE"
+            EXIT_CODE=$?
+            
+            if [ $EXIT_CODE -eq 0 ]; then
+              echo "  ✅ Successfully distributed to $repo"
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            else
+              echo "  ❌ Failed to distribute to $repo (exit code: $EXIT_CODE)"
+              FAIL_COUNT=$((FAIL_COUNT + 1))
+            fi
+            echo ""
+          done
+          
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Distribution Summary:"
+          echo "  ✅ Successful: $SUCCESS_COUNT"
+          echo "  ❌ Failed: $FAIL_COUNT"
+          echo "  📊 Total: ${#REPOS[@]}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          # Exit with error if any distribution failed
+          if [ $FAIL_COUNT -gt 0 ]; then
+            exit 1
+          fi
+
+  distribute-workflows:
+    runs-on: ubuntu-latest
+    needs: distribute-secrets
     steps:
       - name: Checkout source repository
         uses: actions/checkout@v4
@@ -89,7 +143,7 @@ jobs:
             # Copy all workflow files
             echo "→ Copying workflow files to main..."
             if cp -v "../${WORKFLOW_DIR}"/* .github/workflows/ 2>&1; then
-              echo "✓ Files copied successfully"
+              echo "✅ Files copied successfully"
             else
               echo "❌ Failed to copy workflow files"
               cd ..
@@ -101,7 +155,7 @@ jobs:
             if [ ! -f ".github/kicad-config.yml" ]; then
               echo "→ Copying kicad-config.yml file..."
               if cp -v "../configs/kicad-config.yml" .github/ 2>&1; then
-                echo "✓ kicad-config.yml copied successfully"
+                echo "✅ kicad-config.yml copied successfully"
               else
                 echo "○ kicad-config.yml not found in source, skipping..."
               fi
@@ -119,7 +173,7 @@ jobs:
               fi
               
               if git commit -m "chore: update workflows and kicad config from central repository" 2>&1; then
-                echo "✓ Commit created on main"
+                echo "✅ Commit created on main"
               else
                 echo "❌ Failed to create commit"
                 cd ..
@@ -129,7 +183,7 @@ jobs:
               
               echo "→ Pushing main..."
               if git push origin main 2>&1; then
-                echo "✓ Successfully pushed to main"
+                echo "✅ Successfully pushed to main"
               else
                 echo "❌ Failed to push to main"
                 cd ..
@@ -148,17 +202,17 @@ jobs:
             if git ls-remote --heads origin doc_workflow | grep -q doc_workflow; then
               # Checkout existing doc_workflow branch
               if git checkout doc_workflow 2>&1; then
-                echo "✓ Checked out doc_workflow branch"
+                echo "✅ Checked out doc_workflow branch"
                 
                 # Pull latest from main
                 echo "→ Pulling changes from main..."
                 if git pull origin main --no-edit 2>&1; then
-                  echo "✓ Successfully pulled from main to doc_workflow"
+                  echo "✅ Successfully pulled from main to doc_workflow"
                   
                   # Push updated doc_workflow
                   echo "→ Pushing doc_workflow..."
                   if git push origin doc_workflow 2>&1; then
-                    echo "✓ Successfully pushed doc_workflow"
+                    echo "✅ Successfully pushed doc_workflow"
                   else
                     echo "❌ Failed to push doc_workflow"
                   fi
@@ -175,7 +229,7 @@ jobs:
                   git reset --hard "$main_sha"
                   
                   if git push origin doc_workflow --force 2>&1; then
-                    echo "✓ Force updated doc_workflow to match main"
+                    echo "✅ Force updated doc_workflow to match main"
                   else
                     echo "❌ Failed to force update doc_workflow"
                   fi
