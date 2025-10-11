@@ -9,6 +9,7 @@ on:
 env:
   TARGET_REPOS: >-
     ionutms/Minimal_AD74416H
+    ionutms/Minimal_AD74416H_Stack_Adapter
     ionutms/AD74416H_Power_Interface_Module
     ionutms/Modular_AD74416H_PLC
     ionutms/Minimal_ADP1074
