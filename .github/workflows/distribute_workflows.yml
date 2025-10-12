@@ -140,6 +140,38 @@ jobs:
             # Create .github/workflows directory if it doesn't exist
             mkdir -p .github/workflows
             
+            # Get list of workflow files in source directory
+            echo "→ Getting list of workflow files from source..."
+            SOURCE_WORKFLOWS=()
+            for workflow_file in "../${WORKFLOW_DIR}"/*; do
+              if [ -f "$workflow_file" ]; then
+                SOURCE_WORKFLOWS+=("$(basename "$workflow_file")")
+              fi
+            done
+            
+            # Remove extra workflow files in target that don't exist in source
+            echo "→ Checking for extra workflow files in target repository..."
+            for target_file in .github/workflows/*; do
+              if [ -f "$target_file" ]; then
+                target_basename=$(basename "$target_file")
+                
+                # Check if this file exists in source
+                found_in_source=false
+                for source_file in "${SOURCE_WORKFLOWS[@]}"; do
+                  if [ "$target_basename" = "$source_file" ]; then
+                    found_in_source=true
+                    break
+                  fi
+                done
+                
+                # If not found in source, remove it
+                if [ "$found_in_source" = false ]; then
+                  echo "→ Removing extra workflow file: $target_basename"
+                  rm "$target_file"
+                fi
+              fi
+            done
+            
             # Copy all workflow files
             echo "→ Copying workflow files to main..."
             if cp -v "../${WORKFLOW_DIR}"/* .github/workflows/ 2>&1; then
