@@ -9,3 +9,9 @@ left_view_zoom_factor: 1
 left_view_pan: '0,0,0'
 right_view_zoom_factor: 1
 right_view_pan: '0,0,0'
+front_view_zoom_factor: 1
+front_view_rotate: '0,0,0'
+front_view_pan: '0,0,0'
+back_view_zoom_factor: 1
+back_view_rotate: '0,0,0'
+back_view_pan: '0,0,0'
