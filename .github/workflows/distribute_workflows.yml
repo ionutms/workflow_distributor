@@ -56,18 +56,34 @@ jobs:
           REPO_LIST=()
           SECRET_FLAGS=()
           
-          # Convert multi-line string to array
-          IFS=$'\n' read -r -d '' -a LINES <<< "$TARGET_REPOS"
-          
-          for line in "${LINES[@]}"; do
+          # Process each line from TARGET_REPOS
+          echo "$TARGET_REPOS" | while IFS='|' read -r repo secret_flag workflow_flag || [ -n "$repo" ]; do
             # Trim whitespace
-            line=$(echo "$line" | xargs)
-            if [ -n "$line" ]; then
-              IFS='|' read -r repo secret_flag workflow_flag <<< "$line"
+            repo=$(echo "$repo" | xargs)
+            secret_flag=$(echo "$secret_flag" | xargs)
+            
+            if [ -n "$repo" ]; then
               REPO_LIST+=("$repo")
               SECRET_FLAGS+=("$secret_flag")
             fi
           done
+          
+          # Alternative parsing that works better in GitHub Actions
+          REPO_LIST=()
+          SECRET_FLAGS=()
+          
+          while IFS= read -r line || [ -n "$line" ]; do
+            # Skip empty lines
+            line=$(echo "$line" | xargs)
+            [ -z "$line" ] && continue
+            
+            # Parse the line
+            repo=$(echo "$line" | cut -d'|' -f1 | xargs)
+            secret_flag=$(echo "$line" | cut -d'|' -f2 | xargs)
+            
+            REPO_LIST+=("$repo")
+            SECRET_FLAGS+=("$secret_flag")
+          done < <(echo "$TARGET_REPOS")
           
           echo "┌────────────────────────────────────────┐"
           echo "Starting secret distribution"
@@ -146,18 +162,18 @@ jobs:
           REPO_LIST=()
           WORKFLOW_FLAGS=()
           
-          # Convert multi-line string to array
-          IFS=$'\n' read -r -d '' -a LINES <<< "$TARGET_REPOS"
-          
-          for line in "${LINES[@]}"; do
-            # Trim whitespace
+          while IFS= read -r line || [ -n "$line" ]; do
+            # Skip empty lines
             line=$(echo "$line" | xargs)
-            if [ -n "$line" ]; then
-              IFS='|' read -r repo secret_flag workflow_flag <<< "$line"
-              REPO_LIST+=("$repo")
-              WORKFLOW_FLAGS+=("$workflow_flag")
-            fi
-          done
+            [ -z "$line" ] && continue
+            
+            # Parse the line
+            repo=$(echo "$line" | cut -d'|' -f1 | xargs)
+            workflow_flag=$(echo "$line" | cut -d'|' -f3 | xargs)
+            
+            REPO_LIST+=("$repo")
+            WORKFLOW_FLAGS+=("$workflow_flag")
+          done < <(echo "$TARGET_REPOS")
           
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
