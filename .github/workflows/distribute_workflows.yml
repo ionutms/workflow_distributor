@@ -5,52 +5,88 @@ on:
     branches:
       - distribute
   workflow_dispatch:
+    inputs:
+      distribute_secrets:
+        description: 'Distribute secrets to repositories'
+        required: false
+        default: true
+        type: boolean
+      distribute_workflows:
+        description: 'Distribute workflows to repositories'
+        required: false
+        default: true
+        type: boolean
 
 env:
+  # Format: repo_name|secrets|workflows
+  # Use 'true' or 'false' for each flag
   TARGET_REPOS: >-
-    ionutms/Minimal_AD74416H
-    ionutms/Minimal_AD74416H_Stack_Adapter
-    ionutms/AD74416H_Power_Interface_Module
-    ionutms/Modular_AD74416H_PLC
-    ionutms/Minimal_ADP1074
-    ionutms/Minimal_ADPL76030
-    ionutms/Minimal_ADP1032
-    ionutms/Minimal_MAX14906
-    ionutms/Minimal_AD74413R
-    ionutms/Modular_Software_Configurable_IO_PLC
-    ionutms/Minimal_ADIN1110
-    ionutms/Minimal_LTC9111
-    ionutms/Minimal_MAX17761
-    ionutms/Minimal_LT8304
-    ionutms/Minimal_MAX32650
-    ionutms/Minimal_ADP1031
-    ionutms/Minimal_MAX17570
+    ionutms/Minimal_AD74416H|true|true
+    ionutms/Minimal_AD74416H_Stack_Adapter|true|true
+    ionutms/AD74416H_Power_Interface_Module|true|true
+    ionutms/Modular_AD74416H_PLC|true|true
+    ionutms/Minimal_ADP1074|true|true
+    ionutms/Minimal_ADPL76030|true|true
+    ionutms/Minimal_ADP1032|true|true
+    ionutms/Minimal_MAX14906|true|true
+    ionutms/Minimal_AD74413R|true|true
+    ionutms/Modular_Software_Configurable_IO_PLC|true|true
+    ionutms/Minimal_ADIN1110|true|true
+    ionutms/Minimal_LTC9111|true|true
+    ionutms/Minimal_MAX17761|true|true
+    ionutms/Minimal_LT8304|true|true
+    ionutms/Minimal_MAX32650|true|true
+    ionutms/Minimal_ADP1031|true|true
+    ionutms/Minimal_MAX17570|true|true
+    ionutms/Docker_3D_Models_Hosting|true|false
 
 jobs:
   distribute-secrets:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.distribute_secrets == true)
     steps:
-      - name: Distribute REPO_DISPATCH_TOKEN to all target repositories
+      - name: Distribute REPO_DISPATCH_TOKEN to target repositories
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
           SECRET_VALUE: ${{ secrets.REPO_DISPATCH_TOKEN }}
         run: |
           set +e  # Disable exit on error for the entire script
           
-          # Convert TARGET_REPOS to array
-          REPOS=($TARGET_REPOS)
+          # Parse TARGET_REPOS into arrays
+          REPO_LIST=()
+          SECRET_FLAGS=()
           
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Starting secret distribution to ${#REPOS[@]} repositories"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              IFS='|' read -r repo secret_flag workflow_flag <<< "$line"
+              REPO_LIST+=("$repo")
+              SECRET_FLAGS+=("$secret_flag")
+            fi
+          done <<< "$TARGET_REPOS"
+          
+          echo "┌────────────────────────────────────────┐"
+          echo "Starting secret distribution"
+          echo "└────────────────────────────────────────┘"
           echo ""
           
           SUCCESS_COUNT=0
           FAIL_COUNT=0
+          SKIP_COUNT=0
           
           # Process each repository
-          for repo in "${REPOS[@]}"; do
+          for i in "${!REPO_LIST[@]}"; do
+            repo="${REPO_LIST[$i]}"
+            secret_flag="${SECRET_FLAGS[$i]}"
+            
             echo "→ Processing: $repo"
+            
+            # Check if secrets should be distributed to this repo
+            if [ "$secret_flag" != "true" ]; then
+              echo "  ○ Skipping secret distribution (disabled for this repo)"
+              SKIP_COUNT=$((SKIP_COUNT + 1))
+              echo ""
+              continue
+            fi
             
             # Set secret and capture exit code
             gh secret set REPO_DISPATCH_TOKEN \
@@ -68,12 +104,13 @@ jobs:
             echo ""
           done
           
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Distribution Summary:"
+          echo "┌────────────────────────────────────────┐"
+          echo "Secret Distribution Summary:"
           echo "  ✅ Successful: $SUCCESS_COUNT"
           echo "  ❌ Failed: $FAIL_COUNT"
-          echo "  📊 Total: ${#REPOS[@]}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  ○ Skipped: $SKIP_COUNT"
+          echo "  📊 Total: ${#REPO_LIST[@]}"
+          echo "└────────────────────────────────────────┘"
           
           # Exit with error if any distribution failed
           if [ $FAIL_COUNT -gt 0 ]; then
@@ -83,6 +120,10 @@ jobs:
   distribute-workflows:
     runs-on: ubuntu-latest
     needs: distribute-secrets
+    if: |
+      always() && 
+      (needs.distribute-secrets.result == 'success' || needs.distribute-secrets.result == 'skipped') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.distribute_workflows == true))
     steps:
       - name: Checkout source repository
         uses: actions/checkout@v4
@@ -96,8 +137,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
-          # Convert TARGET_REPOS to array
-          REPOS=($TARGET_REPOS)
+          # Parse TARGET_REPOS into arrays
+          REPO_LIST=()
+          WORKFLOW_FLAGS=()
+          
+          while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              IFS='|' read -r repo secret_flag workflow_flag <<< "$line"
+              REPO_LIST+=("$repo")
+              WORKFLOW_FLAGS+=("$workflow_flag")
+            fi
+          done <<< "$TARGET_REPOS"
           
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
@@ -118,11 +168,25 @@ jobs:
           ls -la "$WORKFLOW_DIR"
           echo ""
           
+          SUCCESS_COUNT=0
+          SKIP_COUNT=0
+          
           # Process each repository
-          for repo in "${REPOS[@]}"; do
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          for i in "${!REPO_LIST[@]}"; do
+            repo="${REPO_LIST[$i]}"
+            workflow_flag="${WORKFLOW_FLAGS[$i]}"
+            
+            echo "┌────────────────────────────────────────┐"
             echo "Processing repository: $repo"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "└────────────────────────────────────────┘"
+            
+            # Check if workflows should be distributed to this repo
+            if [ "$workflow_flag" != "true" ]; then
+              echo "○ Skipping workflow distribution (disabled for this repo)"
+              SKIP_COUNT=$((SKIP_COUNT + 1))
+              echo ""
+              continue
+            fi
             
             # Clone the target repository (fetch both main and doc_workflow)
             echo "→ Cloning repository..."
@@ -216,6 +280,7 @@ jobs:
               echo "→ Pushing main..."
               if git push origin main 2>&1; then
                 echo "✅ Successfully pushed to main"
+                SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
               else
                 echo "❌ Failed to push to main"
                 cd ..
@@ -224,6 +289,7 @@ jobs:
               fi
             else
               echo "○ No changes needed on main"
+              SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
             fi
             
             # Now handle doc_workflow branch
@@ -278,6 +344,9 @@ jobs:
             echo ""
           done
           
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Workflow distribution and sync completed!"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "┌────────────────────────────────────────┐"
+          echo "Workflow Distribution Summary:"
+          echo "  ✅ Successful: $SUCCESS_COUNT"
+          echo "  ○ Skipped: $SKIP_COUNT"
+          echo "  📊 Total: ${#REPO_LIST[@]}"
+          echo "└────────────────────────────────────────┘"
