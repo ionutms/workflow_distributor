@@ -56,13 +56,18 @@ jobs:
           REPO_LIST=()
           SECRET_FLAGS=()
           
-          while IFS= read -r line; do
+          # Convert multi-line string to array
+          IFS=$'\n' read -r -d '' -a LINES <<< "$TARGET_REPOS"
+          
+          for line in "${LINES[@]}"; do
+            # Trim whitespace
+            line=$(echo "$line" | xargs)
             if [ -n "$line" ]; then
               IFS='|' read -r repo secret_flag workflow_flag <<< "$line"
               REPO_LIST+=("$repo")
               SECRET_FLAGS+=("$secret_flag")
             fi
-          done <<< "$TARGET_REPOS"
+          done
           
           echo "┌────────────────────────────────────────┐"
           echo "Starting secret distribution"
@@ -141,13 +146,18 @@ jobs:
           REPO_LIST=()
           WORKFLOW_FLAGS=()
           
-          while IFS= read -r line; do
+          # Convert multi-line string to array
+          IFS=$'\n' read -r -d '' -a LINES <<< "$TARGET_REPOS"
+          
+          for line in "${LINES[@]}"; do
+            # Trim whitespace
+            line=$(echo "$line" | xargs)
             if [ -n "$line" ]; then
               IFS='|' read -r repo secret_flag workflow_flag <<< "$line"
               REPO_LIST+=("$repo")
               WORKFLOW_FLAGS+=("$workflow_flag")
             fi
-          done <<< "$TARGET_REPOS"
+          done
           
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
