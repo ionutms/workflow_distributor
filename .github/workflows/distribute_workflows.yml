@@ -20,7 +20,7 @@ on:
 env:
   # Format: repo_name|secrets|workflows
   # Use 'true' or 'false' for each flag
-  TARGET_REPOS: >-
+  TARGET_REPOS: |
     ionutms/Minimal_AD74416H|true|true
     ionutms/Minimal_AD74416H_Stack_Adapter|true|true
     ionutms/AD74416H_Power_Interface_Module|true|true
@@ -52,39 +52,6 @@ jobs:
         run: |
           set +e  # Disable exit on error for the entire script
           
-          # Parse TARGET_REPOS into arrays
-          REPO_LIST=()
-          SECRET_FLAGS=()
-          
-          # Process each line from TARGET_REPOS
-          echo "$TARGET_REPOS" | while IFS='|' read -r repo secret_flag workflow_flag || [ -n "$repo" ]; do
-            # Trim whitespace
-            repo=$(echo "$repo" | xargs)
-            secret_flag=$(echo "$secret_flag" | xargs)
-            
-            if [ -n "$repo" ]; then
-              REPO_LIST+=("$repo")
-              SECRET_FLAGS+=("$secret_flag")
-            fi
-          done
-          
-          # Alternative parsing that works better in GitHub Actions
-          REPO_LIST=()
-          SECRET_FLAGS=()
-          
-          while IFS= read -r line || [ -n "$line" ]; do
-            # Skip empty lines
-            line=$(echo "$line" | xargs)
-            [ -z "$line" ] && continue
-            
-            # Parse the line
-            repo=$(echo "$line" | cut -d'|' -f1 | xargs)
-            secret_flag=$(echo "$line" | cut -d'|' -f2 | xargs)
-            
-            REPO_LIST+=("$repo")
-            SECRET_FLAGS+=("$secret_flag")
-          done < <(echo "$TARGET_REPOS")
-          
           echo "┌────────────────────────────────────────┐"
           echo "Starting secret distribution"
           echo "└────────────────────────────────────────┘"
@@ -93,11 +60,17 @@ jobs:
           SUCCESS_COUNT=0
           FAIL_COUNT=0
           SKIP_COUNT=0
+          TOTAL_COUNT=0
           
-          # Process each repository
-          for i in "${!REPO_LIST[@]}"; do
-            repo="${REPO_LIST[$i]}"
-            secret_flag="${SECRET_FLAGS[$i]}"
+          # Process each repository directly
+          while IFS='|' read -r repo secret_flag workflow_flag; do
+            # Skip empty lines and trim whitespace
+            repo=$(echo "$repo" | xargs)
+            secret_flag=$(echo "$secret_flag" | xargs)
+            
+            [ -z "$repo" ] && continue
+            
+            TOTAL_COUNT=$((TOTAL_COUNT + 1))
             
             echo "→ Processing: $repo"
             
@@ -123,14 +96,14 @@ jobs:
               FAIL_COUNT=$((FAIL_COUNT + 1))
             fi
             echo ""
-          done
+          done <<< "$TARGET_REPOS"
           
           echo "┌────────────────────────────────────────┐"
           echo "Secret Distribution Summary:"
           echo "  ✅ Successful: $SUCCESS_COUNT"
           echo "  ❌ Failed: $FAIL_COUNT"
           echo "  ○ Skipped: $SKIP_COUNT"
-          echo "  📊 Total: ${#REPO_LIST[@]}"
+          echo "  📊 Total: $TOTAL_COUNT"
           echo "└────────────────────────────────────────┘"
           
           # Exit with error if any distribution failed
@@ -158,23 +131,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.WORKFLOW_DISTRIBUTION_TOKEN }}
         run: |
-          # Parse TARGET_REPOS into arrays
-          REPO_LIST=()
-          WORKFLOW_FLAGS=()
-          
-          while IFS= read -r line || [ -n "$line" ]; do
-            # Skip empty lines
-            line=$(echo "$line" | xargs)
-            [ -z "$line" ] && continue
-            
-            # Parse the line
-            repo=$(echo "$line" | cut -d'|' -f1 | xargs)
-            workflow_flag=$(echo "$line" | cut -d'|' -f3 | xargs)
-            
-            REPO_LIST+=("$repo")
-            WORKFLOW_FLAGS+=("$workflow_flag")
-          done < <(echo "$TARGET_REPOS")
-          
           # Directory containing workflow templates
           WORKFLOW_DIR="workflows"
           
@@ -196,11 +152,17 @@ jobs:
           
           SUCCESS_COUNT=0
           SKIP_COUNT=0
+          TOTAL_COUNT=0
           
-          # Process each repository
-          for i in "${!REPO_LIST[@]}"; do
-            repo="${REPO_LIST[$i]}"
-            workflow_flag="${WORKFLOW_FLAGS[$i]}"
+          # Process each repository directly
+          while IFS='|' read -r repo secret_flag workflow_flag; do
+            # Skip empty lines and trim whitespace
+            repo=$(echo "$repo" | xargs)
+            workflow_flag=$(echo "$workflow_flag" | xargs)
+            
+            [ -z "$repo" ] && continue
+            
+            TOTAL_COUNT=$((TOTAL_COUNT + 1))
             
             echo "┌────────────────────────────────────────┐"
             echo "Processing repository: $repo"
@@ -368,11 +330,11 @@ jobs:
             cd ..
             rm -rf "temp-${repo##*/}"
             echo ""
-          done
+          done <<< "$TARGET_REPOS"
           
           echo "┌────────────────────────────────────────┐"
           echo "Workflow Distribution Summary:"
           echo "  ✅ Successful: $SUCCESS_COUNT"
           echo "  ○ Skipped: $SKIP_COUNT"
-          echo "  📊 Total: ${#REPO_LIST[@]}"
+          echo "  📊 Total: $TOTAL_COUNT"
           echo "└────────────────────────────────────────┘"
