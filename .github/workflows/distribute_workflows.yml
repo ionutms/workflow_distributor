@@ -247,6 +247,14 @@ jobs:
               echo "○ kicad-config.yml already exists in target repository, skipping..."
             fi
             
+            # Copy kicad_footprint_manager.py to .github directory
+            echo "→ Copying kicad_footprint_manager.py file..."
+            if cp -v "../scripts/kicad_footprint_manager.py" .github/ 2>&1; then
+              echo "✅ kicad_footprint_manager.py copied successfully"
+            else
+              echo "○ kicad_footprint_manager.py not found in source, skipping..."
+            fi
+            
             # Check if there are changes on main
             if [[ -n $(git status -s) ]]; then
               echo "→ Committing changes to main..."
