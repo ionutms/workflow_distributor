@@ -1,38 +1,79 @@
-picture_prefix_side: '1_'
-picture_prefix_top: '2_'
-picture_prefix_bottom: '3_'
-picture_prefix_left: '4_'
-picture_prefix_right: '5_'
-picture_prefix_front: '6_'
-picture_prefix_back: '7_'
-picture_suffix_side: '_side'
-picture_suffix_top: '_top'
-picture_suffix_bottom: '_bottom'
-picture_suffix_left: '_left'
-picture_suffix_right: '_right'
-picture_suffix_front: '_front'
-picture_suffix_back: '_back'
-top_view_zoom_factor: 1
-top_view_pan: '0,0,0'
-top_view_light_elevation: 60
-bottom_view_zoom_factor: 1
-bottom_view_pan: '0,0,0'
-bottom_view_light_elevation: 60
-side_view_zoom_factor: 1
-side_view_rotate: '315,360,405'
-side_view_pan: '0,0,0'
-side_view_light_elevation: 60
-left_view_zoom_factor: 1
-left_view_pan: '0,0,0'
-left_view_light_elevation: 60
-right_view_zoom_factor: 1
-right_view_pan: '0,0,0'
-right_view_light_elevation: 60
-front_view_zoom_factor: 1
-front_view_rotate: '0,0,0'
-front_view_pan: '0,0,0'
-front_view_light_elevation: 60
-back_view_zoom_factor: 1
-back_view_rotate: '0,0,0'
-back_view_pan: '0,0,0'
-back_view_light_elevation: 60
+views:
+  side:
+    prefix: '1_'
+    suffix: '_side'
+    zoom_factor: 1
+    rotate: '315,360,405'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'top'  # (top, bottom, left, right, front, back)
+    
+  top:
+    prefix: '2_'
+    suffix: '_top'
+    zoom_factor: 1
+    rotate: '0,0,0'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'top'
+    
+  bottom:
+    prefix: '3_'
+    suffix: '_bottom'
+    zoom_factor: 1
+    rotate: '0,0,0'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'bottom'
+    
+  left:
+    prefix: '4_'
+    suffix: '_left'
+    zoom_factor: 1
+    rotate: '0,0,0'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'left'
+    
+  right:
+    prefix: '5_'
+    suffix: '_right'
+    zoom_factor: 1
+    rotate: '0,0,0'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'right'
+    
+  front:
+    prefix: '6_'
+    suffix: '_front'
+    zoom_factor: 1
+    rotate: '0,0,0'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'front'
+    
+  back:
+    prefix: '7_'
+    suffix: '_back'
+    zoom_factor: 1
+    rotate: '0,0,0'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'back'
+    
+  test:
+    prefix: '8_'
+    suffix: '_test'
+    zoom_factor: 1
+    rotate: '0,0,0'
+    pan: '0,0,0'
+    light_elevation: 60
+    side: 'top'
+
+defaults:
+  zoom_factor: 1.0
+  rotate: '0,0,0'
+  pan: '0,0,0'
+  light_elevation: 60
+  side: 'top'
