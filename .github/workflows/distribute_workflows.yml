@@ -263,6 +263,10 @@ jobs:
               if [ -f ".github/kicad-config.yml" ]; then
                 git add .github/kicad-config.yml
               fi
+              # Only add kicad_footprint_manager.py if we just copied it
+              if [ -f ".github/kicad_footprint_manager.py" ]; then
+                git add .github/kicad_footprint_manager.py
+              fi
               
               if git commit -m "chore: update workflows and kicad config from central repository" 2>&1; then
                 echo "✅ Commit created on main"
