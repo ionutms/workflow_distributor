@@ -338,7 +338,25 @@ jobs:
                 echo "❌ Failed to checkout doc_workflow"
               fi
             else
-              echo "○ doc_workflow branch does not exist, skipping..."
+              echo "○ doc_workflow branch does not exist, creating it..."
+              
+              # Make sure we're on main before creating the branch
+              git checkout main
+              
+              # Create doc_workflow branch from main
+              if git checkout -b doc_workflow 2>&1; then
+                echo "✅ Created doc_workflow branch from main"
+                
+                # Push the new branch
+                echo "→ Pushing new doc_workflow branch..."
+                if git push origin doc_workflow 2>&1; then
+                  echo "✅ Successfully pushed new doc_workflow branch"
+                else
+                  echo "❌ Failed to push new doc_workflow branch"
+                fi
+              else
+                echo "❌ Failed to create doc_workflow branch"
+              fi
             fi
             
             cd ..
