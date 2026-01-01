@@ -39,6 +39,7 @@ env:
     ionutms/Minimal_ADP1031|true|true
     ionutms/Minimal_MAX17570|true|true
     ionutms/Minimal_LTC3350|true|true
+    ionutms/Supercap_Bank|true|true
     ionutms/Docker_3D_Models_Hosting|true|false
 
 jobs:
