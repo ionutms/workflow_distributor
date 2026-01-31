@@ -38,6 +38,7 @@ env:
     ionutms/Minimal_MAX32650|true|true
     ionutms/Minimal_ADP1031|true|true
     ionutms/Minimal_MAX17570|true|true
+    ionutms/Minimal_LTC4296-1|true|true
     ionutms/PLC_SPOE_UPS|true|true
     ionutms/Minimal_LTC3350|true|true
     ionutms/Supercap_Bank|true|true
